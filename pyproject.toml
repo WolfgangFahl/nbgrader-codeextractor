@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ProfiWiki"
+authors = [
+    {name = "Wolfgang Fahl", email = "wf@bitplan.com"},
+    {name = "Tim Holzheim", email = "tim.holzheim@rwth-aachen.de"},
+]
+maintainers = [
+  { name = "Wolfgang Fahl", email = "wf@bitplan.com" },
+]
+readme = "README.md"
+license= "Apache-2.0"
+dependencies = [
+]
+
+requires-python = ">=3.8"
+classifiers=[
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License"
+    ]
+dynamic = ["version", "description"]
+[tool.hatch.version]
+path = "nbgExtract/__init__.py"
+
+[project.urls]
+Home = "https://github.com/WolfgangFahl/nbgrader-codeextractor"
+Documentation = "https://github.com/WolfgangFahl/nbgrader-codeextractor"
+Source = "https://github.com/WolfgangFahl/nbgrader-codeextractor"
+
+[project.optional-dependencies]
+test = [
+  "green",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = [
+  "nbgExtract",
+]
+
+[project.scripts]
+nbg-code = "nbgExtract.notebook:main"
