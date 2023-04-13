@@ -44,7 +44,7 @@ options:
 
 ## single submission
 ```bash
-nbg-code --source tests/resources/python_addition/python_addition_source.ipynb --submission tests/resources/python_addition/python_addition_correct_submission.ipynb --template nbgExtract/resources/default_python_template.jinja -d
+nbg-code --source tests/resources/python_addition/python_addition_source.ipynb --submission tests/resources/python_addition/python_addition_correct_submission.ipynb --template nbgExtract/resources/default_python_template.tpy -d
 tail -3 /tmp/submission.py
 ### BEGIN HIDDEN TESTS
 assert z == 10
