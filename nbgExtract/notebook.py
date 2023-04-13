@@ -2,6 +2,7 @@ import copy
 import dataclasses
 import io
 import json
+import re
 import traceback
 import typing
 import zipfile
@@ -99,7 +100,7 @@ s
             str: the python code
         """
         if template_filepath is None:
-            template_filepath = f"{Path(__file__).parent.absolute()}/resources/default_python_template.tpy"
+            template_filepath = f"{Path(__file__).parent.absolute()}/resources/unittest_template.tpy"
         code = ""
         for cell_id, code_cell in self.code_cells.items():
             code += f"\n# id: {cell_id}\n"
@@ -119,12 +120,51 @@ s
         else:
             with open(path, mode="r") as f:
                 template = f.read()
-        template_var = "{{code}}"
-        if template_var not in template:
-            logger.info("template does not contain the variable {{code}} → no place to place the code")
-        else:
-            code = template.replace(template_var, code)
+        template_var_regex = "{{ *code *}}"
+        indent, line_to_replace = self._get_indented_by(template_var_regex, template)
+        if indent is not None:
+            code = self._indent_string(code, indent)
+            code = template.replace(line_to_replace, code)
         return code
+
+    @classmethod
+    def _indent_string(cls, string: str, indent: int) -> str:
+        """
+        indent given string
+        Args:
+            string: string to indent
+            indent: number of spaces
+
+        Returns:
+            indented string
+        """
+        lines = string.split("\n")
+        res = ""
+        for line in lines:
+            res += " " * indent
+            res += line
+            res += "\n"
+        return res
+
+    @classmethod
+    def _get_indented_by(cls, key: str, template: str) -> typing.Union[typing.Tuple[int, str], typing.Tuple[None, None]]:
+        """
+        Find the line were the key occurs and return the indentation of the key
+        Args:
+            key: regex compatible key for which the indentation should be checked
+
+        Returns:
+            int, str: level of indentation, line to replace
+            None: if key was not found
+        """
+        pattern = f'(?P<key> +' + key + ')'
+        matches = re.finditer(pattern, template)
+        for match in matches:
+            line = match.group("key")
+            if line is not None:
+                indent = len(line) - len(line.lstrip())
+                return indent, line
+        return None, None
 
 
 class Submission(GraderNotebook):
