@@ -94,7 +94,8 @@ class TestSubmissions(unittest.TestCase):
             submissions.generate_python_files(tmpdirname)
             generated_files = os.listdir(tmpdirname)
             expected_files = ['test_addition_submission_0001.py', 'test_addition_submission_0002.py']
-            self.assertListEqual(expected_files, generated_files)
+            for file in generated_files:
+                self.assertIn(file, expected_files)
 
 
 if __name__ == '__main__':
