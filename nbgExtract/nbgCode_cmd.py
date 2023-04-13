@@ -50,9 +50,9 @@ def main(argv=None):
         ### handle keyboard interrupt ###
         return 1
     except Exception as e:
-        indent = len(program_name) * " "
-        sys.stderr.write(program_name + ": " + repr(e) + "\n")
-        sys.stderr.write(indent + "  for help use --help")
+        indent = len(self.program_name) * " "
+        err_msg=f"""{self.program_name}:{repr(e)}
+{indent}for help use --help"""
         if debug:
             print(traceback.format_exc())
         return 2

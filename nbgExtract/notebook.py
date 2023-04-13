@@ -41,12 +41,13 @@ class GraderNotebook:
             notebook_content_or_filepath(object): json notebook file path or content
             name(str): name of the notebook
         """
+        self.debug=debug
+        self.name = name
         self.notebook = None
         self.notebook_filepath = "?"
         self.loaded = False
+        # init action ..
         self.load(notebook_content_or_filepath)
-        self.name = name
-        self.debug=debug
 
     @classmethod
     def nbgrader_metadata(cls, cell: Cell):
