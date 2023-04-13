@@ -100,7 +100,7 @@ s
             str: the python code
         """
         if template_filepath is None:
-            template_filepath = f"{Path(__file__).parent.absolute()}/resources/default_python_template.jinja"
+            template_filepath = f"{Path(__file__).parent.absolute()}/resources/default_python_template.tpy"
         code = ""
         for cell_id, code_cell in self.code_cells.items():
             code += f"\n# id: {cell_id}\n"
