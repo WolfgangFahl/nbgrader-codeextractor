@@ -51,4 +51,4 @@ packages = [
 ]
 
 [project.scripts]
-nbg-code = "nbgExtract.notebook:main"
+nbg-code = "nbgExtract.nbgCode_cmd:main"

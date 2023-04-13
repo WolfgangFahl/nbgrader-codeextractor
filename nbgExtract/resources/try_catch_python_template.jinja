@@ -1,0 +1,7 @@
+import traceback
+try:
+    {% filter indent(width=4) %}
+    {{code}}
+    {% endfilter %}
+except Exception as ex:
+  print(traceback.format_exc())
