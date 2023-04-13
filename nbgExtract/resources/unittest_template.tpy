@@ -10,6 +10,4 @@ class TestNotebookSubmission(unittest.TestCase):
         """
         tests submission
         """
-        {% filter indent(width=8) %}
         {{code}}
-        {% endfilter %}
