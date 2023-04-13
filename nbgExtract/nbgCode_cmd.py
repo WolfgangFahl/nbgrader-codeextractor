@@ -27,11 +27,11 @@ def main(argv=None):
         parser.add_argument("--output_folder", default="/tmp/submissions", help="target directory to store the result")
         parser.add_argument("--template", help="template to use for the python code generation")
 
+        args = parser.parse_args(argv[1:])
         if len(argv) < 1:
                 parser.print_usage()
-                return 1
-        args = parser.parse_args(argv[1:])
-        
+                return 1    
+            
         debug = args.debug
         if debug:
             logger.setLevel(level=logging.DEBUG)

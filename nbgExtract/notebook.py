@@ -31,7 +31,8 @@ class GraderNotebook:
     def __init__(
             self,
             notebook_content_or_filepath: typing.Union[dict, str],
-            name: str = None
+            name: str = None,
+            debug: bool=False
     ):
         """
         constructor
@@ -45,6 +46,7 @@ class GraderNotebook:
         self.loaded = False
         self.load(notebook_content_or_filepath)
         self.name = name
+        self.debug=debug
 
     @classmethod
     def nbgrader_metadata(cls, cell: Cell):
