@@ -41,6 +41,22 @@ class TestGraderNotebook(unittest.TestCase):
                 for expected in expected_extractions:
                     self.assertIn(expected, code)
 
+    def test__get_indented_by(self):
+        """
+        tests _get_indented_by
+        """
+        test_params = [
+            (4, r"{{code}}", "import sys\n    {{code}}\n"),
+            (4, r"\{\{ *code *\}\}", "import sys\n    {{ code }}\n"),
+            (2, "2", "0\n 1\n  2\n   3\n")
+        ]
+        for test_param in test_params:
+            with self.subTest(test_param=test_param):
+                expected_indent, key, template = test_param
+                actual_indent, line = GraderNotebook._get_indented_by(key, template)
+                self.assertEqual(expected_indent, actual_indent)
+
+
 
 class TestSubmission(unittest.TestCase):
     """
