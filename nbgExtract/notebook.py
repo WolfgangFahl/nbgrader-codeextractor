@@ -17,11 +17,12 @@ class Cell:
     cell of a jupyter notebook
     """
     cell_type: str
-    id: str
+    id: str = None
     metadata: dict = None
     source: typing.List[str] = None
     execution_count: int = None
     outputs: typing.List[str] = None
+    attachments: dict = None
 
 
 class GraderNotebook:
@@ -49,6 +50,13 @@ class GraderNotebook:
         self.loaded = False
         # init action ..
         self.load(notebook_content_or_filepath)
+        
+    def handleException(self,ex):
+        """
+        handle the given exception
+        """
+        trace = traceback.format_exc() if self.debug else ""
+        logger.error(f"{self.notebook_filepath}:{str(ex)}{trace}")
 
     @classmethod
     def nbgrader_metadata(cls, cell: Cell):
@@ -77,7 +85,14 @@ class GraderNotebook:
             elif isinstance(notebook, io.BytesIO):
                 self.notebook_filepath = notebook.name
                 self.notebook = json.load(notebook)
-            self.cells = [Cell(**record) for record in self.notebook["cells"]]
+            self.cells = []
+            for record in self.notebook["cells"]:
+                try: 
+                    cell=Cell(**record) 
+                    self.cells.append(cell)
+                except Exception as ex:
+                    raise ex
+                    pass
             for cell in self.cells:
                 nbgrader = self.nbgrader_metadata(cell)
                 if nbgrader is not None:
@@ -87,10 +102,9 @@ class GraderNotebook:
                         self.solutions[gradeid] = cell  # raise Exception(f"grade_id missing for {cell}")
             self.loaded = True
         except Exception as ex:
-            trace = traceback.format_exc() if self.debug else ""
-            logger.error(f"{self.notebook_filepath}:{str(ex)}{trace}")
+            self.handleException(ex)
 
-    def as_python_code(self, template_filepath: str = None) -> str:
+    def as_python_code(self, template_filepath: str = None,with_cell_comments:bool=False) -> str:
         """
         convert my source to pythonCode
 s
@@ -106,9 +120,10 @@ s
         for cell_id, code_cell in self.code_cells.items():
             code += f"\n# id: {cell_id}\n"
             nbgrader = self.nbgrader_metadata(code_cell)
-            if nbgrader is not None:
-                for key, value in nbgrader.items():
-                    code += f"#{key}={value}\n"
+            if  with_cell_comments:                
+                if nbgrader is not None:
+                    for key, value in nbgrader.items():
+                        code += f"#{key}={value}\n"
             if code_cell.source is not None:
                 for line in code_cell.source:
                     if line.startswith("!"):
@@ -173,14 +188,14 @@ class Submission(GraderNotebook):
     a submission of a jupyter notebook for grading
     """
 
-    def __init__(self, notebook: typing.Union[dict, str, io.BytesIO]):
+    def __init__(self, notebook: typing.Union[dict, str, io.BytesIO],debug:bool=False):
         """
         constructor
 
         Args:
             notebook(object): json notebook file path or content
         """
-        GraderNotebook.__init__(self, notebook)
+        GraderNotebook.__init__(self, notebook,debug=debug)
 
     def merge_failure(self, cell_id: str):
         """
@@ -231,7 +246,8 @@ class Submissions:
     def __init__(
             self,
             submissions: typing.Optional[typing.List[Submission]] = None,
-            source_notebook: GraderNotebook = None
+            source_notebook: GraderNotebook = None,
+            debug: bool=False
     ):
         """
         constructor
@@ -239,6 +255,7 @@ class Submissions:
             submissions: list of submissions
             source_notebook: source notebook of the submissions
         """
+        self.debug=debug
         if submissions is None:
             submissions = []
         self.submissions = submissions
@@ -256,12 +273,13 @@ class Submissions:
     def __len__(self):
         return len(self.submissions)
 
-    def generate_python_files(self, target_dir: str, template_filepath: str = None):
+    def generate_python_files(self, target_dir: str, template_filepath: str = None, with_cell_comments:bool=False):
         """
         generate python files of the submissions
         Args:
             target_dir: target directory to store the file
             template_filepath: template to use to generate the python files
+            with_cell_comments(bool): if true add jupyter cell metadata as python comments 
         """
         path = Path(target_dir)
         if not path.exists():
@@ -277,15 +295,13 @@ class Submissions:
             merged_notebook: GraderNotebook = submission.merge_code(self.source_notebook)
             py_file_name = f"test_{self.source_notebook.name}_submission_{i:04}.py"
             py_file_path = path.joinpath(py_file_name)
-            py_code = merged_notebook.as_python_code(template_filepath)
+            py_code = merged_notebook.as_python_code(template_filepath,with_cell_comments=with_cell_comments)
             with open(py_file_path, mode="w") as f:
                 f.write(py_code)
             logger.debug(f"({i:04}/{total:04}) Generated {py_file_name}")
 
-
-
     @classmethod
-    def from_zip(cls, file_path: str) -> "Submissions":
+    def from_zip(cls, file_path: str,debug:bool=False) -> "Submissions":
         """
         Generate Submissions from given zip file
         Args:
@@ -300,7 +316,7 @@ class Submissions:
             raise Exception(f"{path} is not a file")
         if not zipfile.is_zipfile(path):
             raise Exception(f"{path} is not a zip file")
-        submissions = Submissions()
+        submissions = Submissions(debug=debug)
         # https://docs.python.org/3/library/zipfile.html#zipfile.ZipFile.open
         with zipfile.ZipFile(path, 'r') as archive:
             for file_name in archive.namelist():
@@ -308,8 +324,6 @@ class Submissions:
                     notebook_content = archive.read(file_name)
                     notebook_file = io.BytesIO(notebook_content)
                     notebook_file.name = file_name
-                    submission = Submission(notebook_file)
+                    submission = Submission(notebook_file,debug=debug)
                     submissions.add_submission(submission)
         return submissions
-
-
