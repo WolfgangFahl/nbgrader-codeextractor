@@ -80,7 +80,7 @@ class GraderNotebook:
             self.code_cells = {}
             if isinstance(notebook, str):
                 self.notebook_filepath = notebook
-                with open(notebook) as nbf:
+                with open(notebook,encoding='utf8') as nbf:
                     self.notebook = json.load(nbf)
             elif isinstance(notebook, io.BytesIO):
                 self.notebook_filepath = notebook.name
@@ -134,7 +134,7 @@ s
         if not path.exists() or not path.is_file():
             logger.info(f"template file for python generation '{template_filepath}' is not a file or does not exist")
         else:
-            with open(path, mode="r") as f:
+            with open(path, mode="r",encoding='utf8') as f:
                 template = f.read()
         template_var_regex = "{{ *code *}}"
         indent, line_to_replace = self._get_indented_by(template_var_regex, template)
@@ -296,7 +296,7 @@ class Submissions:
             py_file_name = f"test_{self.source_notebook.name}_submission_{i:04}.py"
             py_file_path = path.joinpath(py_file_name)
             py_code = merged_notebook.as_python_code(template_filepath,with_cell_comments=with_cell_comments)
-            with open(py_file_path, mode="w") as f:
+            with open(py_file_path, mode="w",encoding='utf8') as f:
                 f.write(py_code)
             logger.debug(f"({i:04}/{total:04}) Generated {py_file_name}")
 
