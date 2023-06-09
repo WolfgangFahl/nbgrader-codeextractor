@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from nbgExtract.notebook import GraderNotebook, Submission, Submissions
+from nbgExtract.notebook import GraderNotebook, NbgraderCellMetadata, Submission, Submissions
 from nbgExtract import logger
 
 
@@ -17,7 +17,7 @@ class TestGraderNotebook(unittest.TestCase):
         """
         setup test env
         """
-        self.resource_dir = f"{Path(__file__).parent.absolute()}/resources"
+        self.resource_dir = Path(__file__).parent.absolute().joinpath("resources")
 
     def test_extraction(self):
         """
@@ -55,6 +55,18 @@ class TestGraderNotebook(unittest.TestCase):
                 expected_indent, key, template = test_param
                 actual_indent, line = GraderNotebook._get_indented_by(key, template)
                 self.assertEqual(expected_indent, actual_indent)
+
+    def test_nbg_cell_type_extraction(self):
+        filepath = self.resource_dir.joinpath("nbgrader_cell_types.ipynb")
+        notebook = GraderNotebook(filepath)
+        for cell in notebook.cells:
+            with self.subTest(cell=cell):
+                nbg_metadata = cell.get_nbg_metadata()
+                if nbg_metadata:
+                    nbg_cell_type = nbg_metadata.get_type()
+                    self.assertEqual("".join(cell.source), nbg_cell_type.value)
+                else:
+                    self.assertEqual("None", "".join(cell.source))
 
 
 

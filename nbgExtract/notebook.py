@@ -7,9 +7,51 @@ import traceback
 import typing
 import zipfile
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
+from typing import Optional
 from . import logger
 
+
+class NbgraderCellType(Enum):
+    """
+    nbgrader cell types
+    """
+    AUTOGRADED_ANSWER = "Autograded answer"
+    AUTOGRADED_TESTS = "Autograded tests"
+    MANUALLY_GRADED_ANSWER = "Manually graded answer"
+    MANUALLY_GRADED_TASK = "Manually graded task"
+    READ_ONLY = "Read-only"
+
+@dataclass
+class NbgraderCellMetadata:
+    """
+    nbgrader cell metadata
+    see https://nbgrader.readthedocs.io/en/stable/contributor_guide/metadata.html
+    """
+    schema_version: int
+    grade: bool
+    grade_id: str
+    solution: bool
+    locked: bool
+    points: Optional[int] = None
+    checksum: Optional[str] = None
+    cell_type: Optional[str] = None  # added with v2
+    task: Optional[bool] = None  # added with v3?
+
+    def get_type(self) -> Optional[NbgraderCellType]:
+        nbg_cell_type = None
+        if not self.grade and self.solution and not self.task:
+            nbg_cell_type = NbgraderCellType.AUTOGRADED_ANSWER
+        elif self.grade and not self.solution and not self.task:
+            nbg_cell_type = NbgraderCellType.AUTOGRADED_TESTS
+        elif self.grade and self.solution and not self.task:
+            nbg_cell_type = NbgraderCellType.MANUALLY_GRADED_ANSWER
+        elif not self.grade and not self.solution and self.task:
+            nbg_cell_type = NbgraderCellType.MANUALLY_GRADED_TASK
+        elif self.locked and not self.grade and not self.solution and not self.task:
+            nbg_cell_type = NbgraderCellType.READ_ONLY
+        return nbg_cell_type
 
 @dataclass
 class Cell:
@@ -24,6 +66,19 @@ class Cell:
     outputs: typing.List[str] = None
     attachments: dict = None
 
+    def get_nbg_metadata(self) -> Optional[NbgraderCellMetadata]:
+        """
+
+        Returns:
+            NbgraderCellMetadata: if the cell has nbgrader metadata
+            None: otherwise
+        """
+        nbg_metadata = None
+        metadata_key = "nbgrader"
+        if metadata_key in self.metadata:
+            nbg_metadata = NbgraderCellMetadata(**self.metadata.get(metadata_key))
+        return nbg_metadata
+
 
 class GraderNotebook:
     """
@@ -32,7 +87,7 @@ class GraderNotebook:
 
     def __init__(
             self,
-            notebook_content_or_filepath: typing.Union[dict, str],
+            notebook_content_or_filepath: typing.Union[dict, str, Path],
             name: str = None,
             debug: bool=False
     ):
@@ -69,7 +124,7 @@ class GraderNotebook:
                 return metadata["nbgrader"]
         return None
 
-    def load(self, notebook: typing.Union[dict, str]):
+    def load(self, notebook: typing.Union[dict, str, Path]):
         """
         load my notebook metadata from the ipynb json files
         """
@@ -78,7 +133,7 @@ class GraderNotebook:
         try:
             self.solutions = {}
             self.code_cells = {}
-            if isinstance(notebook, str):
+            if isinstance(notebook, str) or isinstance(notebook, Path):
                 self.notebook_filepath = notebook
                 with open(notebook,encoding='utf8') as nbf:
                     self.notebook = json.load(nbf)
@@ -188,7 +243,7 @@ class Submission(GraderNotebook):
     a submission of a jupyter notebook for grading
     """
 
-    def __init__(self, notebook: typing.Union[dict, str, io.BytesIO],debug:bool=False):
+    def __init__(self, notebook: typing.Union[dict, str, io.BytesIO], debug: bool = False):
         """
         constructor
 
@@ -247,7 +302,7 @@ class Submissions:
             self,
             submissions: typing.Optional[typing.List[Submission]] = None,
             source_notebook: GraderNotebook = None,
-            debug: bool=False
+            debug: bool = False
     ):
         """
         constructor
