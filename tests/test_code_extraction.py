@@ -3,8 +3,8 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-
-from nbgExtract.notebook import GraderNotebook, NbgraderCellMetadata, Submission, Submissions
+import nbgExtract
+from nbgExtract.notebook import GraderNotebook, Submission, Submissions
 from nbgExtract import logger
 
 
@@ -18,6 +18,7 @@ class TestGraderNotebook(unittest.TestCase):
         setup test env
         """
         self.resource_dir = Path(__file__).parent.absolute().joinpath("resources")
+        self.module_resources = Path(nbgExtract.__file__).parent.joinpath("resources")
 
     def test_extraction(self):
         """
@@ -26,17 +27,17 @@ class TestGraderNotebook(unittest.TestCase):
         assignment_dir = f"{self.resource_dir}/python_addition"
         test_params = [ # file path of assignment, strings that should be extracted
             (f"{assignment_dir}/python_addition_source.ipynb",
-             ["cell-9fb6fe3588ec4909", "### BEGIN SOLUTION", "cell-744e5dbe470759ae", "### BEGIN HIDDEN TESTS"]),
+             ["e2d83191-805e-4049-984a-af12d9f04d22", "### BEGIN SOLUTION", "45974d03-58e0-42b6-941a-25aef37fc8f5", "### BEGIN HIDDEN TESTS"]),
             (f"{assignment_dir}/python_addition_release.ipynb",
-             ["cell-9fb6fe3588ec4909", "# YOUR CODE HERE", "raise NotImplementedError()", "cell-744e5dbe470759ae"]),
+             ["e2d83191-805e-4049-984a-af12d9f04d22", "# YOUR CODE HERE", "raise NotImplementedError()", "45974d03-58e0-42b6-941a-25aef37fc8f5"]),
             (f"{assignment_dir}/python_addition_correct_submission.ipynb",
-             ["cell-9fb6fe3588ec4909", "# YOUR CODE HERE", "z = x + y", "cell-744e5dbe470759ae"]),
+             ["e2d83191-805e-4049-984a-af12d9f04d22", "# YOUR CODE HERE", "z = x + y", "45974d03-58e0-42b6-941a-25aef37fc8f5"]),
         ]
         for test_param in test_params:
             with self.subTest(test_param=test_param):
                 assignment_filepath, expected_extractions = test_param
                 grader_notebook = GraderNotebook(assignment_filepath)
-                code = grader_notebook.as_python_code()
+                code = grader_notebook.as_python_code(template_filepath=self.module_resources.joinpath("unittest_template.tpy"))
                 print(code)
                 for expected in expected_extractions:
                     self.assertIn(expected, code)
@@ -69,7 +70,6 @@ class TestGraderNotebook(unittest.TestCase):
                     self.assertEqual("None", "".join(cell.source))
 
 
-
 class TestSubmission(unittest.TestCase):
     """
     test Submission
@@ -80,6 +80,7 @@ class TestSubmission(unittest.TestCase):
         setup test env
         """
         self.resource_dir = f"{Path(__file__).parent.absolute()}/resources"
+        self.module_resources = Path(nbgExtract.__file__).parent.joinpath("resources")
 
     def test_merging_code(self):
         """
@@ -90,8 +91,8 @@ class TestSubmission(unittest.TestCase):
         grader_notebook = GraderNotebook(source_file)
         submission = Submission(notebook=submission_file)
         merged_submission = submission.merge_code(grader_notebook)
-        code = merged_submission.as_python_code()
-        expected_lines = ["cell-9fb6fe3588ec4909", "# YOUR CODE HERE", "### BEGIN HIDDEN TESTS"]
+        code = merged_submission.as_python_code(template_filepath=self.module_resources.joinpath("unittest_template.tpy"))
+        expected_lines = ["e2d83191-805e-4049-984a-af12d9f04d22", "# YOUR CODE HERE", "### BEGIN HIDDEN TESTS"]
         for expected_line in expected_lines:
             self.assertIn(expected_line, code)
 
@@ -106,6 +107,7 @@ class TestSubmissions(unittest.TestCase):
         setup test env
         """
         self.resource_dir = f"{Path(__file__).parent.absolute()}/resources"
+        self.module_resources = Path(nbgExtract.__file__).parent.joinpath("resources")
         logger.setLevel(logging.DEBUG)
 
     def test_from_zip(self):
@@ -120,10 +122,12 @@ class TestSubmissions(unittest.TestCase):
         submissions.source_notebook = source_notebook
         with tempfile.TemporaryDirectory() as tmpdirname:
             submissions.generate_python_files(tmpdirname)
-            generated_files = os.listdir(tmpdirname)
-            expected_files = ['test_addition_submission_0001.py', 'test_addition_submission_0002.py']
-            for file in generated_files:
-                self.assertIn(file, expected_files)
+            expected_files = [
+                'test_Group 1_122542_assignsubmission_file/python_addition_correct_submission.py',
+                'test_Group 2_122543_assignsubmission_file/python_addition_release.py'
+            ]
+            for expected_file in expected_files:
+                self.assertTrue(Path(tmpdirname).joinpath(expected_file).is_file())
 
 
 if __name__ == '__main__':

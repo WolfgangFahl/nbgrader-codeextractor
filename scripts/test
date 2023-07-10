@@ -13,5 +13,5 @@ fi
 
 green tests -s 1
 }
-# standard tests
-python -m unittest discover
+
+greentest

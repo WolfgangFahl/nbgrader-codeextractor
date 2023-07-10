@@ -6,78 +6,10 @@ import re
 import traceback
 import typing
 import zipfile
-from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
-from typing import Optional
 from . import logger
-
-
-class NbgraderCellType(Enum):
-    """
-    nbgrader cell types
-    """
-    AUTOGRADED_ANSWER = "Autograded answer"
-    AUTOGRADED_TESTS = "Autograded tests"
-    MANUALLY_GRADED_ANSWER = "Manually graded answer"
-    MANUALLY_GRADED_TASK = "Manually graded task"
-    READ_ONLY = "Read-only"
-
-@dataclass
-class NbgraderCellMetadata:
-    """
-    nbgrader cell metadata
-    see https://nbgrader.readthedocs.io/en/stable/contributor_guide/metadata.html
-    """
-    schema_version: int
-    grade: bool
-    grade_id: str
-    solution: bool
-    locked: bool
-    points: Optional[int] = None
-    checksum: Optional[str] = None
-    cell_type: Optional[str] = None  # added with v2
-    task: Optional[bool] = None  # added with v3?
-
-    def get_type(self) -> Optional[NbgraderCellType]:
-        nbg_cell_type = None
-        if not self.grade and self.solution and not self.task:
-            nbg_cell_type = NbgraderCellType.AUTOGRADED_ANSWER
-        elif self.grade and not self.solution and not self.task:
-            nbg_cell_type = NbgraderCellType.AUTOGRADED_TESTS
-        elif self.grade and self.solution and not self.task:
-            nbg_cell_type = NbgraderCellType.MANUALLY_GRADED_ANSWER
-        elif not self.grade and not self.solution and self.task:
-            nbg_cell_type = NbgraderCellType.MANUALLY_GRADED_TASK
-        elif self.locked and not self.grade and not self.solution and not self.task:
-            nbg_cell_type = NbgraderCellType.READ_ONLY
-        return nbg_cell_type
-
-@dataclass
-class Cell:
-    """
-    cell of a jupyter notebook
-    """
-    cell_type: str
-    id: str = None
-    metadata: dict = None
-    source: typing.List[str] = None
-    execution_count: int = None
-    outputs: typing.List[str] = None
-    attachments: dict = None
-
-    def get_nbg_metadata(self) -> Optional[NbgraderCellMetadata]:
-        """
-
-        Returns:
-            NbgraderCellMetadata: if the cell has nbgrader metadata
-            None: otherwise
-        """
-        nbg_metadata = None
-        metadata_key = "nbgrader"
-        if metadata_key in self.metadata:
-            nbg_metadata = NbgraderCellMetadata(**self.metadata.get(metadata_key))
-        return nbg_metadata
+from nbgExtract.gen.generator import NbgCodeGenerator
+from .cells import Cell
 
 
 class GraderNotebook:
@@ -89,7 +21,7 @@ class GraderNotebook:
             self,
             notebook_content_or_filepath: typing.Union[dict, str, Path],
             name: str = None,
-            debug: bool=False
+            debug: bool = False
     ):
         """
         constructor
@@ -103,6 +35,9 @@ class GraderNotebook:
         self.notebook = None
         self.notebook_filepath = "?"
         self.loaded = False
+        self.solutions = {}
+        self.code_cells = {}
+        self.nbg_cells = {}
         # init action ..
         self.load(notebook_content_or_filepath)
         
@@ -133,12 +68,16 @@ class GraderNotebook:
         try:
             self.solutions = {}
             self.code_cells = {}
+            self.nbg_cells = {}
             if isinstance(notebook, str) or isinstance(notebook, Path):
-                self.notebook_filepath = notebook
-                with open(notebook,encoding='utf8') as nbf:
+                self.notebook_filepath = Path(notebook).expanduser()
+                with open(self.notebook_filepath, encoding='utf8') as nbf:
                     self.notebook = json.load(nbf)
+                if isinstance(self.notebook_filepath, Path) and self.notebook_filepath.name is not None and self.name is None:
+                    self.name = self.notebook_filepath.name
             elif isinstance(notebook, io.BytesIO):
                 self.notebook_filepath = notebook.name
+                self.name = notebook.name.replace(".ipynb", "")
                 self.notebook = json.load(notebook)
             self.cells = []
             for record in self.notebook["cells"]:
@@ -149,17 +88,23 @@ class GraderNotebook:
                     raise ex
                     pass
             for cell in self.cells:
+                if cell.cell_type == "code":
+                    self.code_cells[cell.id] = cell
                 nbgrader = self.nbgrader_metadata(cell)
                 if nbgrader is not None:
                     gradeid = nbgrader["grade_id"]
-                    self.code_cells[gradeid] = cell
+                    self.nbg_cells[gradeid] = cell
                     if nbgrader["solution"]:
                         self.solutions[gradeid] = cell  # raise Exception(f"grade_id missing for {cell}")
             self.loaded = True
         except Exception as ex:
             self.handleException(ex)
 
-    def as_python_code(self, template_filepath: str = None,with_cell_comments:bool=False) -> str:
+    def as_python_code(
+            self,
+            template_filepath: typing.Optional[typing.Union[str, Path]] = None,
+            with_cell_comments: bool = False
+    ) -> str:
         """
         convert my source to pythonCode
 s
@@ -189,13 +134,13 @@ s
         if not path.exists() or not path.is_file():
             logger.info(f"template file for python generation '{template_filepath}' is not a file or does not exist")
         else:
-            with open(path, mode="r",encoding='utf8') as f:
+            with open(path, mode="r", encoding='utf8') as f:
                 template = f.read()
-        template_var_regex = "{{ *code *}}"
-        indent, line_to_replace = self._get_indented_by(template_var_regex, template)
-        if indent is not None:
-            code = self._indent_string(code, indent)
-            code = template.replace(line_to_replace, code)
+            template_var_regex = "{{ *code *}}"
+            indent, line_to_replace = self._get_indented_by(template_var_regex, template)
+            if indent is not None:
+                code = self._indent_string(code, indent)
+                code = template.replace(line_to_replace, code)
         return code
 
     @classmethod
@@ -287,10 +232,27 @@ class Submission(GraderNotebook):
                                 metadata={"nbgrader": {}}
                         )
                     notebook = self.notebook
+                # update cells
                 merge_result.code_cells[cell_id] = merge_cell
+                merge_result.overwrite_cell(merge_cell)
                 merge_nbgrader = self.nbgrader_metadata(merge_cell)
                 merge_nbgrader["notebook"] = notebook
         return merge_result
+
+    def overwrite_cell(self, cell: Cell):
+        """
+        Use cell id to update corresponding notebook cell
+        Args:
+            cell: new cell
+        """
+        if cell.id in self.code_cells:
+            self.code_cells[cell.id] = cell
+        if cell.id in self.nbg_cells:
+            self.nbg_cells[cell.id] = cell
+        for i, notebook_cell in enumerate(self.cells):
+            if cell.id == notebook_cell.id:
+                self.cells[i] = cell
+
 
 
 class Submissions:
@@ -328,12 +290,17 @@ class Submissions:
     def __len__(self):
         return len(self.submissions)
 
-    def generate_python_files(self, target_dir: str, template_filepath: str = None, with_cell_comments:bool=False):
+    def generate_python_files(
+            self,
+            target_dir: str,
+            template_filepath: str = None,
+            with_cell_comments: bool = False
+    ):
         """
         generate python files of the submissions
         Args:
             target_dir: target directory to store the file
-            template_filepath: template to use to generate the python files
+            template_filepath: template to use to generate the python files. If None NotebookContext is used
             with_cell_comments(bool): if true add jupyter cell metadata as python comments 
         """
         path = Path(target_dir)
@@ -350,13 +317,17 @@ class Submissions:
             merged_notebook: GraderNotebook = submission.merge_code(self.source_notebook)
             py_file_name = f"test_{self.source_notebook.name}_submission_{i:04}.py"
             py_file_path = path.joinpath(py_file_name)
-            py_code = merged_notebook.as_python_code(template_filepath,with_cell_comments=with_cell_comments)
-            with open(py_file_path, mode="w",encoding='utf8') as f:
-                f.write(py_code)
+            if template_filepath is None:
+                generator = NbgCodeGenerator()
+                generator.generate_file(merged_notebook, target=Path(target_dir))
+            else:
+                py_code = merged_notebook.as_python_code(template_filepath, with_cell_comments=with_cell_comments)
+                with open(py_file_path, mode="w", encoding='utf8') as f:
+                    f.write(py_code)
             logger.debug(f"({i:04}/{total:04}) Generated {py_file_name}")
 
     @classmethod
-    def from_zip(cls, file_path: str,debug:bool=False) -> "Submissions":
+    def from_zip(cls, file_path: typing.Union[str,  Path], debug: bool = False) -> "Submissions":
         """
         Generate Submissions from given zip file
         Args:
@@ -366,7 +337,7 @@ class Submissions:
         Returns:
             Submissions
         """
-        path = Path(file_path)
+        path = Path(file_path).expanduser()
         if not path.is_file():
             raise Exception(f"{path} is not a file")
         if not zipfile.is_zipfile(path):
@@ -379,6 +350,6 @@ class Submissions:
                     notebook_content = archive.read(file_name)
                     notebook_file = io.BytesIO(notebook_content)
                     notebook_file.name = file_name
-                    submission = Submission(notebook_file,debug=debug)
+                    submission = Submission(notebook_file, debug=debug)
                     submissions.add_submission(submission)
         return submissions
