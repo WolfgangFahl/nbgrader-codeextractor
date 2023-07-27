@@ -30,7 +30,9 @@ class NbgCodeGenerator:
             target: target dir location to store the file
         """
         code = self.generate(notebook)
-        file_path = target.joinpath(f"test_{notebook.name}.py")
+        file_name = notebook.name
+        file_name = "".join(x if x.isalnum() else "_" for x in file_name)
+        file_path = target.joinpath(f"test_{file_name}.py")
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with open(file_path, mode="w") as fp:
             fp.write(code)

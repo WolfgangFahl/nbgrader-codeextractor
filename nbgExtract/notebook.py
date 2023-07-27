@@ -4,12 +4,13 @@ import io
 import json
 import re
 import traceback
-import typing
 import zipfile
+import typing
+from typing import Dict, Union
 from pathlib import Path
 from . import logger
 from nbgExtract.gen.generator import NbgCodeGenerator
-from .cells import Cell
+from .cells import Cell, NbgraderCellType
 
 
 class GraderNotebook:
@@ -19,7 +20,7 @@ class GraderNotebook:
 
     def __init__(
             self,
-            notebook_content_or_filepath: typing.Union[dict, str, Path],
+            notebook_content_or_filepath: Union[dict, str, Path],
             name: str = None,
             debug: bool = False
     ):
@@ -36,8 +37,9 @@ class GraderNotebook:
         self.notebook_filepath = "?"
         self.loaded = False
         self.solutions = {}
-        self.code_cells = {}
-        self.nbg_cells = {}
+        self.cells: typing.List[Cell] = []
+        self.code_cells: Dict[str, Cell] = {}
+        self.nbg_cells: Dict[str, Cell] = {}
         # init action ..
         self.load(notebook_content_or_filepath)
         
@@ -49,7 +51,7 @@ class GraderNotebook:
         logger.error(f"{self.notebook_filepath}:{str(ex)}{trace}")
 
     @classmethod
-    def nbgrader_metadata(cls, cell: Cell):
+    def nbgrader_metadata(cls, cell: Cell) -> typing.Optional[Dict]:
         """
         get the nbgrade metadata of a given cell
         """
@@ -59,7 +61,7 @@ class GraderNotebook:
                 return metadata["nbgrader"]
         return None
 
-    def load(self, notebook: typing.Union[dict, str, Path]):
+    def load(self, notebook: Union[dict, str, Path]):
         """
         load my notebook metadata from the ipynb json files
         """
@@ -205,38 +207,39 @@ class Submission(GraderNotebook):
         """
         logger.debug(f"couldn't merge solution code cell {cell_id}")
 
-    def merge_code(self, source_notebook: GraderNotebook) -> "Submission":
+    def merge_code(self, source_notebook: GraderNotebook, only_merge_answers: bool = True) -> "Submission":
         """
         merge my code with the code of the given submission Notebook
         Args:
             source_notebook: source notebook of the exercise that holds the tests for the submission
-
+            only_merge_answers: If True use only the answer cells from the submission. Otherwise, only the Test cells from the source notebook
         Returns:
             Submission - Submission merged with its source
         """
         merge_result = copy.deepcopy(self)
         merge_result.code_cells = {}
         for cell_id, code_cell in source_notebook.code_cells.items():
-            nbgrader = self.nbgrader_metadata(code_cell)
-            if nbgrader is not None:
-                merge_cell = dataclasses.replace(code_cell)
-                notebook = source_notebook.notebook
-                if nbgrader["solution"]:
-                    if cell_id in self.code_cells:
-                        merge_cell = dataclasses.replace(self.code_cells[cell_id])
-                    else:
-                        self.merge_failure(cell_id)
-                        merge_cell = Cell(
-                                cell_type="code",
-                                id=cell_id,
-                                metadata={"nbgrader": {}}
-                        )
-                    notebook = self.notebook
+            nbgrader = code_cell.get_nbg_metadata()
+            merge_cell = dataclasses.replace(code_cell)
+            notebook = source_notebook.notebook
+            if nbgrader and nbgrader.get_type() is NbgraderCellType.AUTOGRADED_ANSWER:
+                if cell_id in self.code_cells:
+                    merge_cell = dataclasses.replace(self.code_cells[cell_id])
+                else:
+                    self.merge_failure(cell_id)
+                    merge_cell = Cell(
+                            cell_type="code",
+                            id=cell_id,
+                            metadata={"nbgrader": {}}
+                    )
+                notebook = self.notebook
+            if only_merge_answers or nbgrader is not None:
                 # update cells
                 merge_result.code_cells[cell_id] = merge_cell
                 merge_result.overwrite_cell(merge_cell)
                 merge_nbgrader = self.nbgrader_metadata(merge_cell)
-                merge_nbgrader["notebook"] = notebook
+                if merge_nbgrader:
+                    merge_nbgrader["notebook"] = notebook
         return merge_result
 
     def overwrite_cell(self, cell: Cell):
@@ -252,7 +255,6 @@ class Submission(GraderNotebook):
         for i, notebook_cell in enumerate(self.cells):
             if cell.id == notebook_cell.id:
                 self.cells[i] = cell
-
 
 
 class Submissions:
@@ -294,7 +296,8 @@ class Submissions:
             self,
             target_dir: str,
             template_filepath: str = None,
-            with_cell_comments: bool = False
+            with_cell_comments: bool = False,
+            only_merge_answers: bool = False
     ):
         """
         generate python files of the submissions
@@ -314,7 +317,7 @@ class Submissions:
             logger.info("Source notebook is not defined!")
         total = len(self)
         for i, submission in enumerate(self.submissions, start=1):
-            merged_notebook: GraderNotebook = submission.merge_code(self.source_notebook)
+            merged_notebook: GraderNotebook = submission.merge_code(self.source_notebook, only_merge_answers=only_merge_answers)
             py_file_name = f"test_{self.source_notebook.name}_submission_{i:04}.py"
             py_file_path = path.joinpath(py_file_name)
             if template_filepath is None:

@@ -30,6 +30,9 @@ def main(argv=None):
         parser.add_argument("--outputPython", default="/tmp/submission.py", help="target file to store the result")
         parser.add_argument("--output_folder", default="/tmp/submissions", help="target directory to store the result")
         parser.add_argument("--template", help="template to use for the python code generation")
+        parser.add_argument("--only_merge_answers", action="store_true",
+                            help="Only merge the answers to the source notebook. "
+                                 "If not set merge only the test cells to the submission notebook")
 
         args = parser.parse_args(argv[1:])
         debug = args.debug
@@ -39,7 +42,7 @@ def main(argv=None):
         source = GraderNotebook(args.source)
         if args.submission:
             submission = Submission(args.submission)
-            merged_submission = submission.merge_code(source)
+            merged_submission = submission.merge_code(source, args.only_merge_answers)
             python_code = merged_submission.as_python_code(args.template)
             with open(args.outputPython, mode="w") as fp:
                 fp.write(python_code)
@@ -49,7 +52,8 @@ def main(argv=None):
             submissions.generate_python_files(
                     target_dir=args.output_folder,
                     template_filepath=args.template,
-                    with_cell_comments=args.with_cell_comments
+                    with_cell_comments=args.with_cell_comments,
+                    only_merge_answers=args.only_merge_answers
             )
         else:
             logger.info("No submissions were provided. Please use --submission or --submission_zip")
