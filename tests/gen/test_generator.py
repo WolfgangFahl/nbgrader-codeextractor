@@ -30,7 +30,7 @@ class TestNbgCodeGenerator(unittest.TestCase):
                 s_merged = submission.merge_code(source_notebook)
                 generator = NbgCodeGenerator()
                 generator.generate_file(s_merged, Path(target))
-            expected_file = Path(target).joinpath("test_Group 1_122542_assignsubmission_file", "python_addition_correct_submission.py")
+            expected_file = Path(target).joinpath("test_Group_1_122542_assignsubmission_file", "python_addition_correct_submission.py")
             f = io.StringIO()
             with contextlib.redirect_stdout(f):
                 x = run_path(expected_file)

@@ -123,8 +123,8 @@ class TestSubmissions(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdirname:
             submissions.generate_python_files(tmpdirname)
             expected_files = [
-                'test_Group 1_122542_assignsubmission_file/python_addition_correct_submission.py',
-                'test_Group 2_122543_assignsubmission_file/python_addition_release.py'
+                'test_Group_1_122542_assignsubmission_file/python_addition_correct_submission.py',
+                'test_Group_2_122543_assignsubmission_file/python_addition_release.py'
             ]
             for expected_file in expected_files:
                 self.assertTrue(Path(tmpdirname).joinpath(expected_file).is_file())
